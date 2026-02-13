@@ -128,14 +128,14 @@ graph TD
         InngestAPI["/api/inngest"]
     end
 
-    subgraph BG ["BACKGROUND JOBS (Inngest)"]
+    subgraph BG ["Inngest"]
         Ingest["Document Ingestion"]
         Chunk["Text Chunking"]
         Summarize["AI Summarization"]
     end
 
     subgraph DB ["DATA & SERVICES"]
-        Supabase[("Supabase\n(PostgreSQL + Storage)")]
+        Supabase[("Supabase (PostgreSQL + Storage)")]
         Clerk{"Clerk Auth"}
         Groq(("Groq\n(Llama 3.3 70B)"))
     end
@@ -398,7 +398,7 @@ This project is open-source under the [MIT License](LICENSE).
 
 <div align="center">
 
-**Built with ❤️ using Next.js, Supabase, and AI**
+**Built with ❤️ using Next.js**
 
 <sub>If you found this helpful, consider giving it a ⭐</sub>
 
