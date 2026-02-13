@@ -3,7 +3,6 @@ import { SignUp } from "@clerk/nextjs";
 export default function SignUpPage() {
     return (
         <div className="flex w-full max-w-4xl flex-col lg:flex-row gap-8 lg:gap-12 items-start px-4" suppressHydrationWarning>
-            {/* Form side */}
             <div className="w-full lg:w-1/2 flex flex-col items-center lg:items-start">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20 text-primary shadow-inner shadow-primary/20 mb-5">
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -41,7 +40,6 @@ export default function SignUpPage() {
                 />
             </div>
 
-            {/* Features side */}
             <div className="hidden lg:flex flex-col w-1/2 pt-14">
                 <h2 className="font-heading text-xl font-bold text-foreground mb-1.5">What you&apos;ll get</h2>
                 <p className="text-sm text-muted-foreground mb-8">Get instant access to all DocuMind features</p>

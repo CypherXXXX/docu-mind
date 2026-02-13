@@ -322,16 +322,16 @@ export function DashboardClient({ documents: initialDocs, storageUsage: initialS
                     cmp = a.file_name.localeCompare(b.file_name);
                     break;
                 case "date":
-                    cmp = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                    cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
                     break;
                 case "size":
-                    cmp = b.file_size - a.file_size;
+                    cmp = a.file_size - b.file_size;
                     break;
                 case "type":
                     cmp = getFileTypeSortOrder(a.file_type || "") - getFileTypeSortOrder(b.file_type || "");
                     break;
             }
-            return sortDirection === "asc" ? -cmp : cmp;
+            return sortDirection === "asc" ? cmp : -cmp;
         });
 
 
@@ -466,7 +466,6 @@ export function DashboardClient({ documents: initialDocs, storageUsage: initialS
                                     {(activeView === "workspace" ||
                                         (typeof activeView === "object" && activeView.type === "project")) && (
                                             <div ref={uploadRef} className="relative mb-6 sm:mb-10 space-y-0">
-                                                {/* Top-right controls — positioned on parent, outside overflow-hidden */}
                                                 <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
                                                     <ThemeToggle className="h-9 w-9 rounded-xl bg-background/40 backdrop-blur-md border border-border/30 hover:bg-background/60" />
                                                     <button

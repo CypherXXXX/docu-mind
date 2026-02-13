@@ -25,10 +25,17 @@ import type { SupabaseDocument } from "@/types/documents";
 import { motion, AnimatePresence } from "framer-motion";
 import { saveChatMessage, clearChatHistory } from "@/lib/actions/chat";
 
+interface ChatSource {
+    pageNumber: number;
+    excerpt: string;
+    score: number;
+}
+
 interface Message {
     id: string;
     role: "user" | "assistant";
     content: string;
+    sources?: ChatSource[];
 }
 
 interface DocumentViewProps {
@@ -141,6 +148,7 @@ export function DocumentView({ document: doc, chunkCount, initialMessages = [] }
                     id: crypto.randomUUID(),
                     role: "assistant",
                     content: responseContent,
+                    sources: data.sources,
                 },
             ]);
             saveChatMessage(doc.id, "assistant", responseContent);
@@ -246,7 +254,7 @@ export function DocumentView({ document: doc, chunkCount, initialMessages = [] }
                                         : "bg-card border border-border/50 text-foreground rounded-bl-md shadow-sm"
                                 )}
                             >
-                                <ChatMessage content={msg.content} role={msg.role} />
+                                <ChatMessage content={msg.content} role={msg.role} sources={msg.sources} />
                             </div>
                             {msg.role === "user" && (
                                 <div className="flex h-6 w-6 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground ring-1 ring-border mt-0.5">
@@ -319,7 +327,7 @@ export function DocumentView({ document: doc, chunkCount, initialMessages = [] }
 
     return (
         <div className="flex flex-col lg:flex-row h-screen bg-background">
-            {/* Mobile Tab Bar */}
+
             <div className="flex lg:hidden border-b border-border/40 bg-card/30">
                 <Link
                     href="/dashboard/documents"
@@ -376,7 +384,7 @@ export function DocumentView({ document: doc, chunkCount, initialMessages = [] }
                 </div>
             </div>
 
-            {/* Mobile: Document Info Bar */}
+
             <div className="flex lg:hidden items-center gap-2 px-3 py-2 border-b border-border/20 bg-card/20 text-[10px] text-muted-foreground overflow-x-auto">
                 <span className="font-medium text-foreground truncate max-w-[40%]">{doc.file_name}</span>
                 <span className="shrink-0">•</span>
@@ -385,7 +393,7 @@ export function DocumentView({ document: doc, chunkCount, initialMessages = [] }
                 <span className="flex items-center gap-0.5 shrink-0"><Layers className="h-2.5 w-2.5" />{chunkCount} chunks</span>
             </div>
 
-            {/* Desktop: Document Panel (left 60%) */}
+
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -438,7 +446,7 @@ export function DocumentView({ document: doc, chunkCount, initialMessages = [] }
                 </div>
             </motion.div>
 
-            {/* Mobile: Document Panel */}
+
             <div className={cn(
                 "flex-1 flex-col lg:hidden",
                 mobileTab === "document" ? "flex" : "hidden"
@@ -452,7 +460,7 @@ export function DocumentView({ document: doc, chunkCount, initialMessages = [] }
                 </div>
             </div>
 
-            {/* Mobile: Chat Panel */}
+
             <div className={cn(
                 "flex-1 flex-col lg:hidden",
                 mobileTab === "chat" ? "flex" : "hidden"
@@ -460,7 +468,7 @@ export function DocumentView({ document: doc, chunkCount, initialMessages = [] }
                 {chatContent}
             </div>
 
-            {/* Desktop: Chat Panel (right 40%) */}
+
             <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useTransition, useEffect } from "react";
+import type React from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Sidebar, type SidebarView } from "@/components/Sidebar";
@@ -59,6 +60,7 @@ export function DocumentsClient({ documents: initialDocs, storageUsage: initialS
     const [filterType, setFilterType] = useState<FileTypeFilter>("all");
     const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
     const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [, startTransition] = useTransition();
     const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -308,16 +310,16 @@ export function DocumentsClient({ documents: initialDocs, storageUsage: initialS
                     cmp = a.file_name.localeCompare(b.file_name);
                     break;
                 case "date":
-                    cmp = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                    cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
                     break;
                 case "size":
-                    cmp = b.file_size - a.file_size;
+                    cmp = a.file_size - b.file_size;
                     break;
                 case "type":
                     cmp = getFileTypeSortOrder(a.file_type || "") - getFileTypeSortOrder(b.file_type || "");
                     break;
             }
-            return sortDirection === "asc" ? -cmp : cmp;
+            return sortDirection === "asc" ? cmp : -cmp;
         });
 
         docs.sort((a, b) => {
@@ -455,11 +457,18 @@ export function DocumentsClient({ documents: initialDocs, storageUsage: initialS
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <button
-                                                onClick={() => router.refresh()}
-                                                className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95"
+                                                onClick={() => {
+                                                    setIsRefreshing(true);
+                                                    startTransition(() => {
+                                                        router.refresh();
+                                                        setTimeout(() => setIsRefreshing(false), 1500);
+                                                    });
+                                                }}
+                                                disabled={isRefreshing}
+                                                className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-secondary hover:text-foreground active:scale-95 disabled:opacity-50"
                                             >
-                                                <RefreshCw className="h-3.5 w-3.5" />
-                                                Refresh
+                                                <RefreshCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+                                                {isRefreshing ? "Refreshing…" : "Refresh"}
                                             </button>
                                             <Link href="/dashboard">
                                                 <Button className="flex items-center gap-2 text-sm font-medium shadow-lg shadow-primary/25 transition-all hover:scale-[1.02] active:scale-95">

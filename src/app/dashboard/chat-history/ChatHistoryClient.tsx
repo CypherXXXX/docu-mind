@@ -80,7 +80,6 @@ export function ChatHistoryClient({ history: initialHistory }: ChatHistoryClient
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4 }}
                 >
-                    {/* Header */}
                     <div className="mb-8">
                         <div className="flex items-center justify-between mb-6">
                             <div className="flex items-center gap-3">
@@ -105,7 +104,6 @@ export function ChatHistoryClient({ history: initialHistory }: ChatHistoryClient
                             <ThemeToggle />
                         </div>
 
-                        {/* Search Bar */}
                         {history.length > 0 && (
                             <motion.div
                                 initial={{ opacity: 0, y: 8 }}
@@ -139,7 +137,6 @@ export function ChatHistoryClient({ history: initialHistory }: ChatHistoryClient
                         )}
                     </div>
 
-                    {/* Empty State */}
                     {history.length === 0 ? (
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
@@ -190,17 +187,14 @@ export function ChatHistoryClient({ history: initialHistory }: ChatHistoryClient
                                     }}
                                     className="group rounded-2xl border border-border/50 bg-card/30 backdrop-blur-sm overflow-hidden transition-all hover:border-border/80 hover:bg-card/50 hover:shadow-lg hover:shadow-black/5"
                                 >
-                                    {/* Conversation Header */}
                                     <div
                                         className="flex items-center gap-3.5 px-5 py-4 cursor-pointer transition-colors"
                                         onClick={() => toggleExpand(group.document_id)}
                                     >
-                                        {/* Doc Icon */}
                                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-indigo-500/15 text-primary ring-1 ring-primary/20 transition-transform group-hover:scale-105">
                                             <FileText className="h-5 w-5" />
                                         </div>
 
-                                        {/* Doc Info */}
                                         <div className="flex-1 min-w-0">
                                             <h3 className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                                                 {group.document_name}
@@ -215,7 +209,6 @@ export function ChatHistoryClient({ history: initialHistory }: ChatHistoryClient
                                             </div>
                                         </div>
 
-                                        {/* Message Count Badge */}
                                         <div
                                             className={cn(
                                                 "flex items-center gap-1 rounded-lg bg-gradient-to-r px-2.5 py-1 text-[11px] font-semibold ring-1",
@@ -226,7 +219,6 @@ export function ChatHistoryClient({ history: initialHistory }: ChatHistoryClient
                                             {group.messages.length}
                                         </div>
 
-                                        {/* Action Buttons */}
                                         <div className="flex items-center gap-1.5">
                                             <Link
                                                 href={`/dashboard/document/${group.document_id}`}
@@ -257,7 +249,6 @@ export function ChatHistoryClient({ history: initialHistory }: ChatHistoryClient
                                         </div>
                                     </div>
 
-                                    {/* Expanded Messages */}
                                     <AnimatePresence>
                                         {expandedDoc === group.document_id && (
                                             <motion.div
@@ -268,7 +259,6 @@ export function ChatHistoryClient({ history: initialHistory }: ChatHistoryClient
                                                 className="overflow-hidden"
                                             >
                                                 <div className="border-t border-border/30 bg-gradient-to-b from-secondary/20 to-transparent">
-                                                    {/* Scroll Container */}
                                                     <div className="relative max-h-[500px] overflow-y-auto px-5 py-5 space-y-4 scrollbar-thin">
                                                         {group.messages.map((msg, msgIndex) => (
                                                             <motion.div
@@ -312,7 +302,6 @@ export function ChatHistoryClient({ history: initialHistory }: ChatHistoryClient
                                                         ))}
                                                     </div>
 
-                                                    {/* Continue Chat Button */}
                                                     <div className="px-5 pb-4 pt-2">
                                                         <Link
                                                             href={`/dashboard/document/${group.document_id}`}

@@ -157,13 +157,13 @@ export function DragDropZone({ onUploadComplete }: DragDropZoneProps = {}) {
                 onDrop={handleDrop}
                 className={cn(
                     "group relative flex flex-col items-center justify-center rounded-2xl sm:rounded-3xl border-2 border-dashed p-6 sm:p-12 text-center transition-all duration-500 ease-out cursor-pointer",
-                    "border-border/60 bg-card/30",
+                    "border-border/60 dark:border-border/80 bg-card/30 dark:bg-white/[0.04]",
                     "shadow-sm hover:shadow-xl",
                     status === "processing"
-                        ? "pointer-events-none border-primary/40 bg-primary/5"
-                        : "hover:border-primary/50 hover:bg-primary/5",
+                        ? "pointer-events-none border-primary/40 bg-primary/5 dark:bg-primary/10"
+                        : "hover:border-primary/50 hover:bg-primary/5 dark:hover:bg-primary/10",
                     isDragging
-                        ? "border-primary bg-primary/10 shadow-[0_0_80px_-20px_var(--primary-color)] scale-[1.02]"
+                        ? "border-primary bg-primary/10 dark:bg-primary/15 shadow-[0_0_80px_-20px_var(--primary-color)] scale-[1.02]"
                         : ""
                 )}
             >

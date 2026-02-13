@@ -5,10 +5,7 @@ import {
     SortAsc,
     SortDesc,
     Filter,
-    Pin,
     X,
-    FileText,
-    FileType2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getFileTypeColor } from "@/lib/utils/fileTypes";
@@ -33,8 +30,6 @@ export function SortFilterBar({
     sortDirection,
     onSortChange,
     onDirectionToggle,
-    filterPinned,
-    onFilterPinnedToggle,
     filterType,
     onFilterTypeChange,
 }: SortFilterBarProps) {
@@ -73,7 +68,7 @@ export function SortFilterBar({
             <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
                 <Filter className={cn(
                     "h-3.5 w-3.5 shrink-0",
-                    (filterPinned || filterType !== "all") ? "text-primary" : "text-muted-foreground"
+                    filterType !== "all" ? "text-primary" : "text-muted-foreground"
                 )} />
 
                 {(["PDF", "Word", "PPTX"] as const).map((type) => (
@@ -91,25 +86,11 @@ export function SortFilterBar({
                     </button>
                 ))}
 
-                <div className="h-3.5 w-px bg-border mx-0.5 shrink-0" />
-
-                <button
-                    onClick={onFilterPinnedToggle}
-                    className={cn(
-                        "flex items-center gap-1 sm:gap-1.5 rounded-md px-2 sm:px-2.5 py-1 text-[11px] sm:text-xs font-medium transition-all whitespace-nowrap shrink-0",
-                        filterPinned
-                            ? "bg-primary/10 text-primary ring-1 ring-primary/20"
-                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                    )}
-                >
-                    <Pin className="h-3 w-3" />
-                    Pinned
-                </button>
-                {(filterPinned || filterType !== "all") && (
+                {filterType !== "all" && (
                     <button
-                        onClick={() => { onFilterPinnedToggle(); if (filterType !== "all") onFilterTypeChange("all"); }}
+                        onClick={() => onFilterTypeChange("all")}
                         className="ml-0.5 sm:ml-1 rounded-md p-1 text-muted-foreground/60 hover:text-destructive transition-colors shrink-0"
-                        title="Clear all filters"
+                        title="Clear filter"
                     >
                         <X className="h-3.5 w-3.5" />
                     </button>

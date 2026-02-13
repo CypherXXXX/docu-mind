@@ -16,10 +16,17 @@ import { cn } from "@/lib/utils";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { getChatMessages } from "@/lib/actions/chat";
 
+interface ChatSource {
+    pageNumber: number;
+    excerpt: string;
+    score: number;
+}
+
 interface Message {
     id: string;
     role: "user" | "assistant";
     content: string;
+    sources?: ChatSource[];
 }
 
 interface ChatPanelProps {
@@ -119,6 +126,7 @@ export function ChatPanel({ docId, docTitle, onClose }: ChatPanelProps) {
                     id: crypto.randomUUID(),
                     role: "assistant",
                     content: data.content || "No response received.",
+                    sources: data.sources,
                 },
             ]);
         } catch (err) {
@@ -139,7 +147,6 @@ export function ChatPanel({ docId, docTitle, onClose }: ChatPanelProps) {
 
     return (
         <div className="fixed inset-0 sm:inset-y-0 sm:right-0 sm:left-auto z-50 flex w-full sm:max-w-lg flex-col border-l border-border/60 bg-background/95 shadow-2xl backdrop-blur-xl animate-in slide-in-from-right duration-300">
-            {/* Header */}
             <div className="flex items-center justify-between border-b border-border/40 px-4 sm:px-5 py-3 sm:py-4 bg-card/50">
                 <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                     <div className="flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-primary/20">
@@ -163,7 +170,6 @@ export function ChatPanel({ docId, docTitle, onClose }: ChatPanelProps) {
                 </button>
             </div>
 
-            {/* Messages */}
             <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-4 sm:space-y-5">
                 {isLoadingHistory && messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full">
@@ -226,7 +232,7 @@ export function ChatPanel({ docId, docTitle, onClose }: ChatPanelProps) {
                                     : "bg-card border border-border/50 text-foreground rounded-bl-md"
                             )}
                         >
-                            <ChatMessage content={msg.content} role={msg.role} />
+                            <ChatMessage content={msg.content} role={msg.role} sources={msg.sources} />
                         </div>
                         {msg.role === "user" && (
                             <div className="flex h-6 w-6 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-lg bg-secondary text-secondary-foreground ring-1 ring-border mt-0.5">
@@ -238,7 +244,6 @@ export function ChatPanel({ docId, docTitle, onClose }: ChatPanelProps) {
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
             <div className="border-t border-border/40 p-3 sm:p-4 bg-card/30">
                 {messages.length >= 2 && (
                     <a

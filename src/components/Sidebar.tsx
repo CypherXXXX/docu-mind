@@ -159,7 +159,7 @@ export function Sidebar({
                 )}
                 suppressHydrationWarning
             >
-                {/* Header */}
+
                 <div className="flex h-16 items-center justify-between px-4 border-b border-border" suppressHydrationWarning>
                     <AnimatePresence mode="wait">
                         {!isCollapsed && (
@@ -188,7 +188,7 @@ export function Sidebar({
                     </button>
                 </div>
 
-                {/* Navigation */}
+
                 <nav className="flex-1 space-y-1 px-3 py-6 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                     {!isCollapsed && (
                         <div className="px-3 mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 animate-in fade-in">
@@ -427,7 +427,7 @@ export function Sidebar({
                     </Link>
                 )}
 
-                {/* Storage Section — visually rich */}
+
                 <div className="p-4 border-t border-border" suppressHydrationWarning>
                     {!isCollapsed ? (
                         <motion.div
@@ -436,7 +436,7 @@ export function Sidebar({
                             exit={{ opacity: 0 }}
                             className="rounded-xl bg-gradient-to-br from-secondary/60 to-secondary/30 dark:from-white/5 dark:to-white/[0.02] p-3.5 ring-1 ring-border/50 space-y-3"
                         >
-                            {/* Header row */}
+
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
                                     <div className={cn(
@@ -466,7 +466,7 @@ export function Sidebar({
                                 </span>
                             </div>
 
-                            {/* Progress bar */}
+
                             <div className="relative h-2 w-full rounded-full bg-secondary dark:bg-white/10 overflow-hidden">
                                 <motion.div
                                     className={cn(
@@ -483,7 +483,7 @@ export function Sidebar({
                                 />
                             </div>
 
-                            {/* Size labels */}
+
                             <div className="flex items-center justify-between">
                                 <p className="text-[10px] text-muted-foreground font-mono">
                                     {formatBytes(storageUsed)}
@@ -494,7 +494,7 @@ export function Sidebar({
                             </div>
                         </motion.div>
                     ) : (
-                        /* Collapsed: circular progress ring */
+
                         <div className="flex flex-col items-center gap-1.5" title={`Storage: ${usagePercent}% used (${formatBytes(storageUsed)} / ${formatBytes(storageTotal)})`}>
                             <div className="relative h-10 w-10">
                                 <svg className="h-10 w-10 -rotate-90" viewBox="0 0 36 36">

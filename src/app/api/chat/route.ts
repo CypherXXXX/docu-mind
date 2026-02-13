@@ -17,6 +17,28 @@ function getGroq() {
     return _groq;
 }
 
+interface SearchResult {
+    id: string;
+    content: string;
+    chunk_index: number;
+    page_number: number | null;
+    bm25_score: number;
+    trigram_score: number;
+    combined_score: number;
+}
+
+interface ChunkRow {
+    content: string;
+    chunk_index: number;
+    page_number: number | null;
+}
+
+function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export async function POST(req: Request) {
     try {
         const { userId } = await auth();
@@ -38,7 +60,7 @@ export async function POST(req: Request) {
 
         const { data: doc, error: docError } = await supabase
             .from("documents")
-            .select("id, file_name")
+            .select("id, file_name, file_type, file_size, page_count, summary")
             .eq("id", docId)
             .eq("user_id", userId)
             .single();
@@ -47,9 +69,11 @@ export async function POST(req: Request) {
             return Response.json({ error: "Document not found or access denied" }, { status: 404 });
         }
 
-        const { data: chunks, error: chunksError } = await supabase
+        const latestUserMessage = messages[messages.length - 1]?.content || "";
+
+        const { data: allChunks, error: chunksError } = await supabase
             .from("document_chunks")
-            .select("content, chunk_index")
+            .select("content, chunk_index, page_number")
             .eq("document_id", docId)
             .eq("user_id", userId)
             .order("chunk_index", { ascending: true });
@@ -58,28 +82,91 @@ export async function POST(req: Request) {
             return Response.json({ error: "Failed to load document content" }, { status: 500 });
         }
 
-        if (!chunks || chunks.length === 0) {
+        if (!allChunks || allChunks.length === 0) {
             return Response.json(
                 { error: "No content found. The document may not have been processed yet." },
                 { status: 404 }
             );
         }
 
-        const MAX_CONTEXT_CHARS = 28_000;
+        const chunks = allChunks as ChunkRow[];
+        const totalChunks = chunks.length;
+        const fileType = doc.file_type || "pdf";
+        const isPptx = fileType === "pptx";
+        const hasSlideNumbers = isPptx && chunks.some((c) => c.page_number && c.page_number > 0);
+
         let context = "";
-        for (const c of chunks) {
-            if (context.length + c.content.length > MAX_CONTEXT_CHARS) break;
-            context += c.content + "\n\n";
+        let usedHybridSearch = false;
+
+        try {
+            const { data: searchResults, error: searchError } = await supabase.rpc(
+                "hybrid_search_chunks",
+                {
+                    query_text: latestUserMessage,
+                    target_doc_id: docId,
+                    target_user_id: userId,
+                    match_count: 10,
+                    bm25_weight: 1.0,
+                    trigram_weight: 0.5,
+                }
+            );
+
+            if (!searchError && searchResults && searchResults.length > 0) {
+                const results = searchResults as SearchResult[];
+                const contextParts: string[] = [];
+                for (const r of results) {
+                    if (hasSlideNumbers && r.page_number) {
+                        contextParts.push(`[Slide ${r.page_number}]: ${r.content}`);
+                    } else {
+                        contextParts.push(r.content);
+                    }
+                }
+                context = contextParts.join("\n\n");
+                usedHybridSearch = true;
+            }
+        } catch {
+            usedHybridSearch = false;
         }
 
-        const systemPrompt = `You are DocuMind, an intelligent AI document assistant. You are chatting about the document: "${doc.file_name}".
+        if (!context) {
+            const MAX_CONTEXT_CHARS = 28_000;
+            for (const c of chunks) {
+                const entry = hasSlideNumbers && c.page_number
+                    ? `[Slide ${c.page_number}]: ${c.content}`
+                    : c.content;
+                if (context.length + entry.length > MAX_CONTEXT_CHARS) break;
+                context += entry + "\n\n";
+            }
+        }
 
-RULES:
-1. Answer based ONLY on the provided document content below. Do not use external knowledge.
-2. If the answer is not found in the document, say: "I cannot find that information in this document."
-3. Be concise, clear, and helpful.
-4. Format your responses with markdown for readability.
-5. When quoting from the document, use blockquotes.
+        const docMeta = [
+            `File: "${doc.file_name}"`,
+            `Type: ${fileType.toUpperCase()}`,
+            `Size: ${formatFileSize(doc.file_size || 0)}`,
+            doc.page_count ? `Total ${isPptx ? "slides" : "pages"}: ${doc.page_count}` : null,
+            `Indexed sections: ${totalChunks}`,
+            doc.summary ? `Summary: ${doc.summary}` : null,
+        ].filter(Boolean).join("\n");
+
+        const slideInstructions = hasSlideNumbers
+            ? "\n- For PPTX presentations, content is tagged with [Slide N]. Reference slide numbers when relevant."
+            : "";
+
+        const systemPrompt = `You are DocuMind, an expert AI document assistant. You have been given the complete indexed content of a document to answer questions about.
+
+DOCUMENT INFO:
+${docMeta}
+
+YOUR GUIDELINES:
+- Answer ONLY based on the document content provided below. Never use outside knowledge.
+- If information is not found in the document, clearly state: "I couldn't find that information in this document."
+- Be thorough but concise. Give complete answers without unnecessary filler.
+- Use markdown formatting for readability: headers, bold, lists, code blocks as appropriate.
+- When quoting directly from the document, use blockquotes (>).
+- Structure longer answers with clear sections and bullet points.
+- If the user asks about the document structure (e.g. number of pages, what it covers), use the DOCUMENT INFO above.${slideInstructions}
+- Do NOT fabricate page numbers or section references. Only cite slide numbers if they appear in the content tags.
+- Search method: ${usedHybridSearch ? "Hybrid (BM25 + keyword matching)" : "Full document scan"}
 
 DOCUMENT CONTENT:
 ${context}`;
@@ -92,8 +179,6 @@ ${context}`;
 
         let lastError: unknown = null;
 
-        const latestUserMessage = messages[messages.length - 1]?.content || "";
-
         for (const modelName of models) {
             try {
                 const result = await generateText({
@@ -102,12 +187,10 @@ ${context}`;
                     messages,
                 });
 
-                // Persist both messages with explicit timestamps to guarantee order
                 const now = new Date();
                 const userTime = now.toISOString();
                 const assistantTime = new Date(now.getTime() + 1000).toISOString();
 
-                // Dedup check: skip insert if an identical user message was saved in the last 30 seconds
                 const thirtySecsAgo = new Date(now.getTime() - 30000).toISOString();
                 const { data: recentDups } = await supabase
                     .from("chat_messages")
@@ -130,8 +213,6 @@ ${context}`;
                     } else {
                         revalidatePath("/dashboard/chat-history");
                     }
-                } else {
-                    console.log("Skipped duplicate chat message insert");
                 }
 
                 return Response.json({ content: result.text });

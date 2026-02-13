@@ -26,6 +26,7 @@ export interface DocumentChunk {
     user_id: string;
     chunk_index: number;
     content: string;
+    page_number?: number | null;
     created_at: string;
 }
 

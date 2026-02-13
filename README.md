@@ -112,35 +112,39 @@ DocuMind is a **full-stack AI document intelligence platform** that lets users u
 
 ## 🏛️ Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (Next.js 16)                     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────────┐  │
-│  │ Landing  │  │Dashboard │  │ Document │  │   Chat Panel   │  │
-│  │  Page    │  │  Client  │  │   View   │  │  (RAG Chat)    │  │
-│  └──────────┘  └──────────┘  └──────────┘  └────────────────┘  │
-├─────────────────────────────────────────────────────────────────┤
-│                       API LAYER (Route Handlers)                 │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────────┐  │
-│  │ /api/chat│  │/api/     │  │/api/     │  │ /api/webhooks  │  │
-│  │ (RAG)   │  │checkout  │  │suggest   │  │  (Stripe)      │  │
-│  └──────────┘  └──────────┘  └──────────┘  └────────────────┘  │
-├─────────────────────────────────────────────────────────────────┤
-│                     SERVER ACTIONS                               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────────┐  │
-│  │  Ingest  │  │Documents │  │   Chat   │  │   Summarize    │  │
-│  │ (Parse + │  │  (CRUD)  │  │(History) │  │   (AI Gen)     │  │
-│  │  Embed)  │  │          │  │          │  │                │  │
-│  └──────────┘  └──────────┘  └──────────┘  └────────────────┘  │
-├─────────────────────────────────────────────────────────────────┤
-│                      DATA & SERVICES                             │
-│  ┌───────────────┐  ┌────────────┐  ┌───────────────────────┐  │
-│  │   Supabase    │  │   Clerk    │  │    Groq / Gemini      │  │
-│  │ (PostgreSQL + │  │   (Auth)   │  │  (LLM + Embeddings)   │  │
-│  │  Storage +    │  │            │  │                        │  │
-│  │  Realtime)    │  │            │  │                        │  │
-│  └───────────────┘  └────────────┘  └───────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    subgraph Frontend ["FRONTEND (Next.js 16)"]
+        Landing[Landing Page]
+        Dash[Dashboard Client]
+        DocView[Document View]
+        Chat[Chat Panel]
+    end
+
+    subgraph API ["API LAYER (Route Handlers)"]
+        ChatAPI["/api/chat (Hybrid RAG)"]
+        CheckoutAPI["/api/checkout"]
+        SuggestAPI["/api/suggest"]
+        InngestAPI["/api/inngest"]
+    end
+
+    subgraph BG ["BACKGROUND JOBS (Inngest)"]
+        Ingest["Document Ingestion"]
+        Embed["Embedding + Chunking"]
+        Summarize["AI Summarization"]
+    end
+
+    subgraph DB ["DATA & SERVICES"]
+        Supabase[("Supabase\n(PostgreSQL + pgvector + Storage)")]
+        Clerk{"Clerk Auth"}
+        Groq(("Groq\n(Llama 3.3 70B)"))
+        Gemini(("Google Gemini\n(Embeddings)"))
+    end
+
+    Landing & Dash & DocView & Chat --> API
+    InngestAPI --> BG
+    BG --> Supabase & Groq & Gemini
+    API --> Supabase & Clerk & Groq & Gemini
 ```
 
 <br/>
@@ -151,15 +155,17 @@ DocuMind is a **full-stack AI document intelligence platform** that lets users u
 |-------|-----------|---------|
 | **Framework** | Next.js 16 (App Router) | Full-stack React with RSC & Server Actions |
 | **Language** | TypeScript | End-to-end type safety |
-| **Styling** | Tailwind CSS 4 + Framer Motion | Responsive design + fluid animations |
+| **Styling** | Tailwind CSS 4 + CSS Animations | Responsive design + fluid animations |
 | **UI Library** | shadcn/ui + Radix UI | Accessible, composable components |
 | **Auth** | Clerk | OAuth, email auth, session management |
-| **Database** | Supabase (PostgreSQL) | Documents, chunks, chat history, real-time |
+| **Database** | Supabase (PostgreSQL + pgvector) | Documents, chunks, chat history, real-time |
 | **Storage** | Supabase Storage | File uploads with per-user buckets |
-| **AI / LLM** | Groq (Llama 3.3) | Blazing-fast chat inference |
-| **Embeddings** | Google Gemini | Semantic vector embeddings for RAG |
+| **AI / LLM** | Groq (Llama 3.3 70B) | Blazing-fast chat inference (~120ms) |
+| **Embeddings** | Google Gemini (text-embedding-004) | 768-dim vectors for hybrid search |
+| **Search** | Hybrid (BM25 + Trigram RRF) | Keyword + fuzzy matching via Supabase RPC |
+| **Background Jobs** | Inngest | Durable document processing pipeline |
 | **Payments** | Stripe | Subscription billing & webhooks |
-| **File Parsing** | pdf-parse, Mammoth, JSZip | PDF, DOCX, PPTX text extraction |
+| **File Parsing** | pdf-parse, Mammoth, JSZip | PDF, DOCX, PPTX (per-slide) extraction |
 | **Deployment** | Vercel | Edge-optimized hosting |
 
 <br/>
@@ -235,8 +241,10 @@ CREATE TABLE documents (
 CREATE TABLE document_chunks (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
   content TEXT NOT NULL,
   embedding VECTOR(768),
+  page_number INT NOT NULL DEFAULT 1,
   chunk_index INT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -259,28 +267,51 @@ CREATE TABLE projects (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable vector similarity search
-CREATE OR REPLACE FUNCTION match_document_chunks(
-  query_embedding VECTOR(768),
-  match_document_id UUID,
-  match_threshold FLOAT DEFAULT 0.5,
-  match_count INT DEFAULT 5
+-- Enable hybrid search (semantic + full-text)
+CREATE OR REPLACE FUNCTION hybrid_search_chunks(
+  p_query_embedding VECTOR(768),
+  p_query_text TEXT,
+  p_document_id UUID,
+  p_user_id TEXT,
+  p_match_count INT DEFAULT 8,
+  p_semantic_weight FLOAT DEFAULT 0.7,
+  p_text_weight FLOAT DEFAULT 0.3
 ) RETURNS TABLE (
   id UUID,
   content TEXT,
+  page_number INT,
   similarity FLOAT
 ) LANGUAGE plpgsql AS $$
 BEGIN
   RETURN QUERY
-  SELECT
-    dc.id,
-    dc.content,
-    1 - (dc.embedding <=> query_embedding) AS similarity
-  FROM document_chunks dc
-  WHERE dc.document_id = match_document_id
-    AND 1 - (dc.embedding <=> query_embedding) > match_threshold
-  ORDER BY dc.embedding <=> query_embedding
-  LIMIT match_count;
+  WITH semantic AS (
+    SELECT dc.id, dc.content, dc.page_number,
+           1 - (dc.embedding <=> p_query_embedding) AS score
+    FROM document_chunks dc
+    WHERE dc.document_id = p_document_id AND dc.user_id = p_user_id
+    ORDER BY dc.embedding <=> p_query_embedding
+    LIMIT p_match_count * 2
+  ),
+  fulltext AS (
+    SELECT dc.id, dc.content, dc.page_number,
+           ts_rank(to_tsvector('english', dc.content), plainto_tsquery('english', p_query_text)) AS score
+    FROM document_chunks dc
+    WHERE dc.document_id = p_document_id AND dc.user_id = p_user_id
+      AND to_tsvector('english', dc.content) @@ plainto_tsquery('english', p_query_text)
+    LIMIT p_match_count * 2
+  ),
+  combined AS (
+    SELECT COALESCE(s.id, f.id) AS id,
+           COALESCE(s.content, f.content) AS content,
+           COALESCE(s.page_number, f.page_number) AS page_number,
+           (COALESCE(s.score, 0) * p_semantic_weight + COALESCE(f.score, 0) * p_text_weight) AS score
+    FROM semantic s
+    FULL OUTER JOIN fulltext f ON s.id = f.id
+  )
+  SELECT combined.id, combined.content, combined.page_number, combined.score AS similarity
+  FROM combined
+  ORDER BY combined.score DESC
+  LIMIT p_match_count;
 END;
 $$;
 
@@ -362,13 +393,13 @@ sequenceDiagram
     F->>A: POST { messages, docId }
     A->>G: Generate embedding for query
     G-->>A: Query vector (768d)
-    A->>S: match_document_chunks(vector, docId)
-    S-->>A: Top 5 relevant chunks
-    A->>L: System prompt + chunks + question
-    L-->>A: AI-generated answer
+    A->>S: hybrid_search_chunks(vector, query_text, docId)
+    S-->>A: Top 8 chunks (semantic + full-text fusion)
+    A->>L: System prompt + doc metadata + chunks + question
+    L-->>A: AI-generated answer with [Page X] citations
     A->>S: Save chat message
     A-->>F: Stream response
-    F-->>U: Display answer
+    F-->>U: Display answer with page references
 ```
 
 <br/>
@@ -378,10 +409,11 @@ sequenceDiagram
 DocuMind follows a **premium glassmorphic design language** with these principles:
 
 - **🌗 Dual Themes** — Full dark mode and light mode with seamless transitions
-- **✨ Micro-Animations** — Framer Motion powers smooth page transitions, hover effects, and loading states
+- **✨ CSS Animations** — Staggered entrance effects, glow pulses, and smooth transitions
 - **📱 Mobile-First** — Tab-based layouts on mobile, split-pane on desktop, touch-optimized hit targets
 - **🎭 Glassmorphism** — Backdrop blur, translucent surfaces, and layered depth
 - **⚡ Optimistic UI** — Instant feedback with background sync for star, archive, and rename actions
+- **📄 Page-Level Citations** — AI responses include `[Page X]` references for accurate sourcing
 
 <br/>
 

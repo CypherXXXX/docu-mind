@@ -3,8 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 import { createGroq } from "@ai-sdk/groq";
 import { generateText } from "ai";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse");
+const pdfParse: (buf: Buffer) => Promise<{ text: string; numpages: number }> = require("pdf-parse");
 
 const CHUNK_SIZE = 1000;
 const CHUNK_OVERLAP = 200;
@@ -43,13 +42,14 @@ function splitTextIntoChunks(text: string): string[] {
     return chunks.filter((c) => c.length > 0);
 }
 
-/** Extract text from a PDF buffer */
-async function extractPdfText(buffer: Buffer): Promise<string> {
+async function extractPdfText(buffer: Buffer): Promise<{ text: string; numPages: number }> {
     let rawText = "";
+    let numPages = 1;
 
     try {
         const parsed = await pdfParse(buffer);
         rawText = parsed.text;
+        numPages = parsed.numpages || 1;
     } catch {
         rawText = "";
     }
@@ -66,18 +66,21 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
         }
     }
 
-    return rawText;
+    return { text: rawText, numPages };
 }
 
-/** Extract text from a DOCX buffer */
 async function extractDocxText(buffer: Buffer): Promise<string> {
     const mammoth = await import("mammoth");
     const result = await mammoth.extractRawText({ buffer });
     return result.value || "";
 }
 
-/** Extract text from a PPTX buffer using jszip + XML parsing */
-async function extractPptxText(buffer: Buffer): Promise<string> {
+interface SlideChunk {
+    text: string;
+    slideNumber: number;
+}
+
+async function extractPptxSlides(buffer: Buffer): Promise<SlideChunk[]> {
     const JSZip = (await import("jszip")).default;
     const zip = await JSZip.loadAsync(buffer);
 
@@ -89,7 +92,7 @@ async function extractPptxText(buffer: Buffer): Promise<string> {
             return numA - numB;
         });
 
-    const textParts: string[] = [];
+    const slides: SlideChunk[] = [];
 
     for (let i = 0; i < slideFiles.length; i++) {
         const xml = await zip.files[slideFiles[i]].async("text");
@@ -108,11 +111,11 @@ async function extractPptxText(buffer: Buffer): Promise<string> {
         }
 
         if (texts.length > 0) {
-            textParts.push(`--- Slide ${i + 1} ---\n${texts.join(" ")}`);
+            slides.push({ text: `--- Slide ${i + 1} ---\n${texts.join(" ")}`, slideNumber: i + 1 });
         }
     }
 
-    return textParts.join("\n\n");
+    return slides;
 }
 
 export const processDocument = inngest.createFunction(
@@ -140,7 +143,7 @@ export const processDocument = inngest.createFunction(
                 .eq("id", docId);
         });
 
-        const chunks = await step.run("download-parse-chunk", async () => {
+        const result = await step.run("download-parse-chunk", async () => {
             const { data, error } = await supabase.storage
                 .from("user_uploads")
                 .download(filePath);
@@ -153,38 +156,60 @@ export const processDocument = inngest.createFunction(
             const buffer = Buffer.from(arrayBuffer);
 
             const type = fileType || fileName.split(".").pop()?.toLowerCase() || "pdf";
-            let rawText = "";
 
-            switch (type) {
-                case "docx":
-                    rawText = await extractDocxText(buffer);
-                    break;
-                case "pptx":
-                    rawText = await extractPptxText(buffer);
-                    break;
-                case "pdf":
-                default:
-                    rawText = await extractPdfText(buffer);
-                    break;
+            if (type === "pptx") {
+                const slides = await extractPptxSlides(buffer);
+                if (slides.length === 0) {
+                    throw new Error(`Could not extract text from "${fileName}". The PowerPoint presentation may be empty or corrupted.`);
+                }
+                const allText = sanitizeText(slides.map((s) => s.text).join("\n\n"));
+                const chunks = splitTextIntoChunks(allText);
+
+                const totalSlides = slides.length;
+                const charsPerSlide = Math.ceil(allText.length / totalSlides);
+                const chunkRows = chunks.map((text, i) => {
+                    const midpoint = i * CHUNK_SIZE;
+                    const slideNum = Math.min(Math.floor(midpoint / charsPerSlide) + 1, totalSlides);
+                    return { text, slideNumber: slideNum };
+                });
+
+                return { chunks: chunkRows.map((c) => c.text), pageCount: totalSlides, isPptx: true, slideMap: chunkRows };
+            }
+
+            let rawText = "";
+            let pageCount = 1;
+
+            if (type === "docx") {
+                rawText = await extractDocxText(buffer);
+            } else {
+                const pdf = await extractPdfText(buffer);
+                rawText = pdf.text;
+                pageCount = pdf.numPages;
             }
 
             if (!rawText || rawText.trim().length === 0) {
-                const typeLabel = type === "docx" ? "Word document" : type === "pptx" ? "PowerPoint presentation" : "PDF";
-                throw new Error(
-                    `Could not extract text from "${fileName}". The ${typeLabel} may be empty or corrupted.`
-                );
+                const typeLabel = type === "docx" ? "Word document" : "PDF";
+                throw new Error(`Could not extract text from "${fileName}". The ${typeLabel} may be empty or corrupted.`);
             }
 
             const cleanText = sanitizeText(rawText);
-            return splitTextIntoChunks(cleanText);
+            const chunks = splitTextIntoChunks(cleanText);
+
+            return { chunks, pageCount, isPptx: false, slideMap: null };
         });
 
-        await step.run("save-chunks", async () => {
-            const chunkRows = chunks.map((text: string, i: number) => ({
+        await step.run("save-chunks-and-metadata", async () => {
+            await supabase
+                .from("documents")
+                .update({ page_count: result.pageCount })
+                .eq("id", docId);
+
+            const chunkRows = result.chunks.map((text: string, i: number) => ({
                 document_id: docId,
                 user_id: userId,
                 chunk_index: i,
                 content: text,
+                page_number: result.isPptx && result.slideMap ? result.slideMap[i]?.slideNumber || 1 : null,
             }));
 
             for (let i = 0; i < chunkRows.length; i += BATCH_SIZE) {
@@ -200,7 +225,7 @@ export const processDocument = inngest.createFunction(
             const apiKey = process.env.GROQ_API_KEY;
             if (!apiKey) return;
 
-            const combinedText = chunks.slice(0, 10).join("\n").slice(0, 5000);
+            const combinedText = result.chunks.slice(0, 10).join("\n").slice(0, 5000);
             const groq = createGroq({ apiKey });
 
             const models = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"];
@@ -208,7 +233,7 @@ export const processDocument = inngest.createFunction(
 
             for (const modelName of models) {
                 try {
-                    const result = await generateText({
+                    const genResult = await generateText({
                         model: groq(modelName),
                         system:
                             "You are a document summarizer. Generate exactly 3 concise sentences that capture the key information of the document. Do not include any preamble — just output the 3 sentences directly.",
@@ -216,7 +241,7 @@ export const processDocument = inngest.createFunction(
                         maxOutputTokens: 200,
                         temperature: 0.3,
                     });
-                    summary = result.text.trim();
+                    summary = genResult.text.trim();
                     if (summary) break;
                 } catch {
                     continue;
@@ -235,6 +260,6 @@ export const processDocument = inngest.createFunction(
                 .eq("id", docId);
         });
 
-        return { success: true, chunks: chunks.length, fileName };
+        return { success: true, chunks: result.chunks.length, pageCount: result.pageCount, fileName };
     }
 );

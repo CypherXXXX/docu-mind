@@ -144,7 +144,6 @@ export function Header({
             </div>
 
             <div className="flex items-center gap-3">
-                {/* Mobile Search Toggle */}
                 {!isSearchOpen && (
                     <Button
                         variant="ghost"
@@ -156,7 +155,6 @@ export function Header({
                     </Button>
                 )}
 
-                {/* Search Bar - Responsive */}
                 <div className={cn(
                     "relative group transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
                     isSearchOpen
@@ -244,7 +242,6 @@ export function Header({
                             </Button>
                         )}
 
-                        {/* Theme Toggle */}
                         {mounted && (
                             <Button
                                 variant="ghost"
