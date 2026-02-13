@@ -158,10 +158,9 @@ graph TD
 | **Styling** | Tailwind CSS 4 + CSS Animations | Responsive design + fluid animations |
 | **UI Library** | shadcn/ui + Radix UI | Accessible, composable components |
 | **Auth** | Clerk | OAuth, email auth, session management |
-| **Database** | Supabase (PostgreSQL + pgvector) | Documents, chunks, chat history, real-time |
+| **Database** | Supabase (PostgreSQL) | Documents, chunks, chat history, real-time |
 | **Storage** | Supabase Storage | File uploads with per-user buckets |
-| **AI / LLM** | Groq (Llama 3.3 70B) | Blazing-fast chat inference (~120ms) |
-| **Embeddings** | Google Gemini (text-embedding-004) | 768-dim vectors for hybrid search |
+| **AI / LLM** | Groq (Llama 3.3 70B) | Blazing-fast chat inference (free tier) |
 | **Search** | Hybrid (BM25 + Trigram RRF) | Keyword + fuzzy matching via Supabase RPC |
 | **Background Jobs** | Inngest | Durable document processing pipeline |
 | **Payments** | Stripe | Subscription billing & webhooks |
@@ -178,7 +177,6 @@ graph TD
 - [Supabase](https://supabase.com) project (free tier)
 - [Clerk](https://clerk.com) application (free tier)
 - [Groq](https://console.groq.com) API key (free tier)
-- [Google AI Studio](https://aistudio.google.com) API key — for Gemini embeddings (free tier)
 
 ### 1. Clone & Install
 
@@ -204,9 +202,8 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
 SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
-# AI Keys  
+# AI
 GROQ_API_KEY=gsk_...
-GOOGLE_GENERATIVE_AI_API_KEY=AI...
 
 # Stripe (optional)
 STRIPE_SECRET_KEY=sk_...
